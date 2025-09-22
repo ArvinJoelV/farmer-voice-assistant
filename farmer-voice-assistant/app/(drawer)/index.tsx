@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState,useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -32,6 +32,10 @@ export default function FarmerAssistantScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
+  useEffect(() => {
+    loadMockConversation()
+  }, []);
+
   const sendTextMessage = async (text: string) => {
     if (!text.trim()) return;
     setMessages((prev) => [...prev, { role: "user", text }]);
@@ -39,11 +43,13 @@ export default function FarmerAssistantScreen() {
     setLoading(true);
 
     try {
-      const ansRes = await fetch(`http://192.168.31.131:8000/answer?question=${encodeURIComponent(question)}`);
-      const ansData = await ansRes.json();
-      const answer = ansData.answer;
-      console.log(answer);
-
+      
+      const ansRes = await axios.post("http://10.107.174.201:8000/answer", {
+        question: text,
+        lang: "hi",
+      });
+      const answer = ansRes.data.answer;
+      console.log(answer)
 
       setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
       Speech.speak(answer, { language: "hi" });
@@ -116,7 +122,7 @@ export default function FarmerAssistantScreen() {
     name: "audio.wav",
   } as any);
 
-    const sttRes = await axios.post("http://192.168.31.131:8000/stt", formData, {
+    const sttRes = await axios.post("http://10.107.174.201:8000/stt", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
@@ -128,7 +134,7 @@ export default function FarmerAssistantScreen() {
     ]);
 
     // Send transcript to QA endpoint (fix: /answer, not /stt)
-    const ansRes = await axios.post("http://192.168.31.131:8000/answer", {
+    const ansRes = await axios.post("http://10.107.174.201:8000/answer", {
       question: transcript,
       lang: "hi",
     });
@@ -153,6 +159,27 @@ export default function FarmerAssistantScreen() {
   setLoading(false);
   scrollToBottom();
 };
+  const loadMockConversation = () => {
+  const mockMessages: Message[] = [
+    { role: "assistant", text: "வணக்கம்! நான் உங்களுக்கான விவசாய உதவியாளர். உங்கள் கேள்விகளை கேளுங்கள்." },
+    { role: "user", text: "நான் என் நிலத்தில் வெற்றிலை பயிர் செய்ய விரும்புகிறேன்." },
+    { role: "assistant", text: "சரி! வெற்றிலை பயிர்க்கான சிறந்த காலம் monsoon காலத்தில். நிலத்தை நன்கு தயாரிக்கவும்." },
+    { role: "user", text: "நான் எவ்வளவு நீர் அளிக்க வேண்டும்?" },
+    { role: "assistant", text: "அன்றாட சின்ன அளவு நீர் போதும், அதிகம் குடிநீர் கொடுக்க வேண்டாம். drip irrigation பயன்படுத்தினால் சிறந்தது." },
+  ];
+
+  // Add messages with delay to simulate conversation
+  mockMessages.forEach((msg, index) => {
+    setTimeout(() => {
+      setMessages((prev) => [...prev, msg]);
+      if (msg.role === "assistant" && msg.text) {
+        Speech.speak(msg.text, { language: "ta-IN" });
+      }
+      scrollToBottom();
+    }, index * 5000); // 1.5s delay between messages
+  });
+};
+
 
   const scrollToBottom = () => {
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
@@ -236,49 +263,57 @@ export default function FarmerAssistantScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F6FFF2" },
+  container: { flex: 1, backgroundColor: "#F3FDF6" }, // soft green background
   chatContainer: { padding: 10, paddingBottom: 80 },
+
   message: {
     maxWidth: "75%",
-    padding: 12,
+    padding: 14,
     marginVertical: 6,
-    borderRadius: 16,
+    borderRadius: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
+
   userMessage: {
     alignSelf: "flex-end",
-    backgroundColor: "#DCF8C6",
+    backgroundColor: "#FFF3E0", // warm cream
     borderTopRightRadius: 4,
   },
   assistantMessage: {
     alignSelf: "flex-start",
-    backgroundColor: "#fff",
+    backgroundColor: "#E8F5E9", // light nature green
     borderTopLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: "#eee",
   },
-  userText: { color: "#222", fontSize: 16 },
-  assistantText: { color: "#222", fontSize: 16 },
+
+  userText: { color: "#4E342E", fontSize: 16 },
+  assistantText: { color: "#1B5E20", fontSize: 16 },
+
   inputBar: {
     flexDirection: "row",
     alignItems: "center",
+    margin: 12,
     padding: 8,
     backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderColor: "#ddd",
+    borderRadius: 25,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
   },
   input: {
     flex: 1,
     padding: 10,
-    borderRadius: 20,
-    backgroundColor: "#F1F8E9",
-    marginRight: 8,
     fontSize: 16,
+    color: "#2E7D32",
   },
   sendBtn: {
-    backgroundColor: "#43A047",
-    padding: 10,
-    borderRadius: 20,
-    marginRight: 6,
+    backgroundColor: "#2E7D32", // deep green
+    padding: 12,
+    borderRadius: 25,
+    marginLeft: 6,
   },
   micBtn: {
     backgroundColor: "#43A047",

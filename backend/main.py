@@ -21,7 +21,7 @@ async def stt(audio: UploadFile = File(...), lang: str = Form("auto")):
         tmp.write(await audio.read())
         tmp_path = tmp.name
 
-    # Run Whisper locally (pip install openai-whisper)
+    
     import whisper
     model = whisper.load_model("small")  # tiny, base, small, medium, large
     result = model.transcribe(tmp_path, language=None if lang == "auto" else lang)
@@ -33,13 +33,11 @@ qa_model = pipeline("question-answering", model="distilbert-base-uncased-distill
 
 class QuestionRequest(BaseModel):
     question: str
-    lang: str = "en"  # optional, keep for compatibility
+    lang: str = "en"  
 
 @app.post("/answer")
 async def answer(req: QuestionRequest):
     question = req.question
-    # For QA pipeline, you also need some context. 
-    # If you only have the question, you can provide an empty context or generic instructions.
     context = """
 Farming is the practice of cultivating crops and raising animals for food, fiber, medicinal plants, and other products. 
 There are several types of farming: crop farming, livestock farming, mixed farming, subsistence farming, and organic farming. 
