@@ -17,7 +17,7 @@
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
     "axios": "^1.11.0",
-    "expo": "^54.0.8",
+    "expo": "~54.0.10",
     "expo-av": "~16.0.7",
     "expo-blur": "~15.0.7",
     "expo-constants": "~18.0.9",
@@ -26,7 +26,7 @@
     "expo-image": "~3.0.8",
     "expo-linking": "~8.0.8",
     "expo-permissions": "^14.4.0",
-    "expo-router": "~6.0.6",
+    "expo-router": "~6.0.8",
     "expo-speech": "~14.0.7",
     "expo-splash-screen": "~31.0.10",
     "expo-status-bar": "~3.0.8",
@@ -48,10 +48,11 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@babel/preset-typescript": "^7.27.1",
+    "@react-native-community/cli": "^20.0.2",
     "@types/react": "^19.1.13",
     "eslint": "^9.25.0",
-    "eslint-config-expo": "~9.2.0",
-    "typescript": "~5.8.3"
+    "eslint-config-expo": "~10.0.0",
+    "typescript": "~5.9.2"
   },
   "private": true
 }

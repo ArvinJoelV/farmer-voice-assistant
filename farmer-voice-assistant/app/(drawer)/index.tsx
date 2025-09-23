@@ -37,31 +37,34 @@ export default function FarmerAssistantScreen() {
   }, []);
 
   const sendTextMessage = async (text: string) => {
-    if (!text.trim()) return;
-    setMessages((prev) => [...prev, { role: "user", text }]);
-    setInput("");
-    setLoading(true);
+  if (!text.trim()) return;
+  setMessages((prev) => [...prev, { role: "user", text }]);
+  setInput("");
+  setLoading(true);
 
-    try {
-      
-      const ansRes = await axios.post("http://10.107.174.201:8000/answer", {
-        question: text,
-        lang: "hi",
-      });
-      const answer = ansRes.data.answer;
-      console.log(answer)
+  try {
+    // Send question to backend instead of Ollama directly
+    const ansRes = await axios.post("http://192.168.31.131:8000/answer", {
+      question: text
+    });
 
-      setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
-      Speech.speak(answer, { language: "hi" });
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: "❌ Error fetching answer." },
-      ]);
-    }
-    setLoading(false);
-    scrollToBottom();
-  };
+    const answer = ansRes.data.answer || "❌ No answer from backend";
+    console.log(answer);
+
+    setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
+    Speech.speak(answer, { language: ansRes.data.lang });
+  } catch (err) {
+    console.error(err);
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", text: "❌ Error fetching answer." },
+    ]);
+  }
+
+  setLoading(false);
+  scrollToBottom();
+};
+
 
   const startRecording = async () => {
     try {
@@ -109,7 +112,7 @@ export default function FarmerAssistantScreen() {
     setPendingAudio(null);
   };
 
-  const sendPendingAudio = async () => {
+ const sendPendingAudio = async () => {
   if (!pendingAudio) return;
   setLoading(true);
 
@@ -117,36 +120,33 @@ export default function FarmerAssistantScreen() {
     // Upload audio for STT
     const formData = new FormData();
     formData.append("audio", {
-    uri: pendingAudio.startsWith("file://") ? pendingAudio : `file://${pendingAudio}`,
-    type: "audio/wav",
-    name: "audio.wav",
-  } as any);
+      uri: pendingAudio.startsWith("file://") ? pendingAudio : `file://${pendingAudio}`,
+      type: "audio/wav",
+      name: "audio.wav",
+    } as any);
 
-    const sttRes = await axios.post("http://10.107.174.201:8000/stt", formData, {
+    const sttRes = await axios.post("http://192.168.31.131:8000/stt", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
     const transcript = sttRes.data.text;
-    console.log(transcript)
+    console.log(transcript);
+
     setMessages((prev) => [
       ...prev,
       { role: "user", text: transcript, audioUri: pendingAudio },
     ]);
 
-    // Send transcript to QA endpoint (fix: /answer, not /stt)
-    const ansRes = await axios.post("http://10.107.174.201:8000/answer", {
-      question: transcript,
-      lang: "hi",
+    // Send transcript to backend QA endpoint
+    const ansRes = await axios.post("http://192.168.31.131:8000/answer", {
+      question: transcript
     });
 
-    const answer = ansRes.data.answer;
-    console.log(answer)
+    const answer = ansRes.data.answer || "❌ No answer from backend";
+    console.log(answer);
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "assistant", text: answer },
-    ]);
-    Speech.speak(answer, { language: "hi" });
+    setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
+    Speech.speak(answer, { language: ansRes.data.lang });
   } catch (err) {
     console.error(err);
     setMessages((prev) => [
@@ -159,26 +159,23 @@ export default function FarmerAssistantScreen() {
   setLoading(false);
   scrollToBottom();
 };
-  const loadMockConversation = () => {
-  const mockMessages: Message[] = [
-    { role: "assistant", text: "வணக்கம்! நான் உங்களுக்கான விவசாய உதவியாளர். உங்கள் கேள்விகளை கேளுங்கள்." },
-    { role: "user", text: "நான் என் நிலத்தில் வெற்றிலை பயிர் செய்ய விரும்புகிறேன்." },
-    { role: "assistant", text: "சரி! வெற்றிலை பயிர்க்கான சிறந்த காலம் monsoon காலத்தில். நிலத்தை நன்கு தயாரிக்கவும்." },
-    { role: "user", text: "நான் எவ்வளவு நீர் அளிக்க வேண்டும்?" },
-    { role: "assistant", text: "அன்றாட சின்ன அளவு நீர் போதும், அதிகம் குடிநீர் கொடுக்க வேண்டாம். drip irrigation பயன்படுத்தினால் சிறந்தது." },
-  ];
 
-  // Add messages with delay to simulate conversation
-  mockMessages.forEach((msg, index) => {
-    setTimeout(() => {
-      setMessages((prev) => [...prev, msg]);
-      if (msg.role === "assistant" && msg.text) {
-        Speech.speak(msg.text, { language: "ta-IN" });
-      }
-      scrollToBottom();
-    }, index * 5000); // 1.5s delay between messages
-  });
+  const loadMockConversation = () => {
+  const welcomeMessage: Message = {
+    role: "assistant",
+    text: "🙏 नमस्ते! நான் உங்கள் விவசாய உதவியாளர். Ask me anything about farming and I’ll help you.",
+  };
+
+  setMessages([welcomeMessage]);
+
+  // 🔊 Speak each part separately in correct language
+  Speech.speak("नमस्ते!", { language: "hi-IN" });
+  Speech.speak("நான் உங்கள் விவசாய உதவியாளர்.", { language: "ta-IN" });
+  Speech.speak("Ask me anything about farming and I’ll help you.", { language: "en-US" });
+
+  scrollToBottom();
 };
+
 
 
   const scrollToBottom = () => {
@@ -186,26 +183,42 @@ export default function FarmerAssistantScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
-    <View
-      style={[
-        styles.message,
-        item.role === "user" ? styles.userMessage : styles.assistantMessage,
-      ]}
-    >
-      {item.audioUri ? (
-        <TouchableOpacity onPress={async () => {
-          const { sound } = await Audio.Sound.createAsync({ uri: item.audioUri! });
-          await sound.playAsync();
-        }}>
-          <Ionicons name="play" size={20} color={item.role === "user" ? "#222" : "#228B22"} />
+  <View
+    style={[
+      styles.message,
+      item.role === "user" ? styles.userMessage : styles.assistantMessage,
+    ]}
+  >
+    {item.audioUri ? (
+      <View>
+        <TouchableOpacity
+          onPress={async () => {
+            const { sound } = await Audio.Sound.createAsync({ uri: item.audioUri! });
+            await sound.playAsync();
+          }}
+        >
+          <Ionicons
+            name="play"
+            size={20}
+            color={item.role === "user" ? "#222" : "#228B22"}
+          />
         </TouchableOpacity>
-      ) : (
-        <Text style={item.role === "user" ? styles.userText : styles.assistantText}>
-          {item.text}
-        </Text>
-      )}
-    </View>
-  );
+
+        {/* ✅ Show transcript under audio if available */}
+        {item.text && (
+          <Text style={item.role === "user" ? styles.userText : styles.assistantText}>
+            {item.text}
+          </Text>
+        )}
+      </View>
+    ) : (
+      <Text style={item.role === "user" ? styles.userText : styles.assistantText}>
+        {item.text}
+      </Text>
+    )}
+  </View>
+);
+
 
   return (
     <KeyboardAvoidingView
@@ -316,9 +329,10 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   micBtn: {
-    backgroundColor: "#43A047",
-    padding: 10,
-    borderRadius: 20,
+    backgroundColor: "#2E7D32", // deep green
+    padding: 12,
+    borderRadius: 25,
+    marginLeft: 6,
   },
   recording: {
     backgroundColor: "#E53935",

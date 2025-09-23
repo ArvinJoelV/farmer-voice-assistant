@@ -13,7 +13,7 @@ export default function DrawerLayout() {
       <Drawer.Screen
         name="index"
         options={{
-          title: 'Farmer Assistant',
+          title: 'CROPWISE',
           drawerIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />
         }}
       />
