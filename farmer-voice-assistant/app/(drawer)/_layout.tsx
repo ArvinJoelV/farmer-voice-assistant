@@ -5,8 +5,7 @@ export default function DrawerLayout() {
   return (
     <Drawer
       screenOptions={{
-        headerStyle: { backgroundColor: '#43A047' },
-        headerTintColor: '#fff',
+        headerShown: false,
         drawerActiveTintColor: '#43A047'
       }}
     >
@@ -29,6 +28,27 @@ export default function DrawerLayout() {
         options={{
           title: 'History',
           drawerIcon: ({ color, size }) => <Ionicons name="time" size={size} color={color} />
+        }}
+      />
+      <Drawer.Screen
+        name="my-crops"
+        options={{
+          title: 'My Crops',
+          drawerIcon: ({ color, size }) => <Ionicons name="leaf" size={size} color={color} />
+        }}
+      />
+      <Drawer.Screen
+        name="farmer-network"
+        options={{
+          title: 'Farmer Network',
+          drawerIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />
+        }}
+      />
+      <Drawer.Screen
+        name="schemes"
+        options={{
+          title: 'Schemes & Subsidies',
+          drawerIcon: ({ color, size }) => <Ionicons name="document-text" size={size} color={color} />
         }}
       />
       <Drawer.Screen

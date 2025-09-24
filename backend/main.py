@@ -30,7 +30,7 @@ async def stt(audio: UploadFile = File(...), lang: str = Form("auto")):
 
     return {"text": result["text"], "lang": lang}
 
-OLLAMA_API = "http://192.168.31.131:11434/api/generate"
+OLLAMA_API = "http://10.114.75.244:11434/api/generate"
 MODEL_NAME = "llama2"
 
 class QuestionRequest(BaseModel):
@@ -58,7 +58,7 @@ async def answer(req: QuestionRequest):
 
     # 3️⃣ Send English prompt to Ollama
     answer_en = ""
-    prompt= f"Answer the following question in 50 words and concise,and only answer if the question is related to farming ,else say I DONT KNOW ABOUT THAT, I AM ONLY TRAINED TO ANSWER FARMING RELATED QUERIES: {translated_input}"
+    prompt= f"Answer the following question in 30 words and concise,and only answer if the question is related to farming ,else say I DONT KNOW ABOUT THAT, I AM ONLY TRAINED TO ANSWER FARMING RELATED QUERIES: {translated_input}"
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             async with client.stream(
