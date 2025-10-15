@@ -30,8 +30,8 @@ async def stt(audio: UploadFile = File(...), lang: str = Form("auto")):
 
     return {"text": result["text"], "lang": lang}
 
-OLLAMA_API = "http://10.114.75.244:11434/api/generate"
-MODEL_NAME = "llama2"
+OLLAMA_API = os.getenv("OLLAMA_API", "http://192.168.31.131:11434/api/generate")
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 
 class QuestionRequest(BaseModel):
     question: str
@@ -39,6 +39,7 @@ class QuestionRequest(BaseModel):
 @app.post("/answer")
 async def answer(req: QuestionRequest):
     user_question = req.question
+    print(user_question)
 
     # 1️⃣ Auto-detect user language
     try:
@@ -58,28 +59,50 @@ async def answer(req: QuestionRequest):
 
     # 3️⃣ Send English prompt to Ollama
     answer_en = ""
-    prompt= f"Answer the following question in 30 words and concise,and only answer if the question is related to farming ,else say I DONT KNOW ABOUT THAT, I AM ONLY TRAINED TO ANSWER FARMING RELATED QUERIES: {translated_input}"
+    prompt= (
+        "You are a farming assistant. Keep answers under 50 words. "
+        "Answer only farming-related questions.\n"
+        f"Question: {translated_input}"
+    )
+    # Prefer non-streaming call with stream:false to ensure a full body response
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            async with client.stream(
-                "POST",
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(
                 OLLAMA_API,
-                json={"model": MODEL_NAME, "prompt": prompt},
-            ) as resp:
+                json={"model": MODEL_NAME, "prompt": prompt, "stream": False},
+            )
+            if r.status_code == 200:
+                try:
+                    data = r.json()
+                    answer_en = data.get("response", "")
+                except Exception:
+                    answer_en = ""
+            else:
+                answer_en = ""
+    except Exception:
+        answer_en = ""
 
-                async for line in resp.aiter_lines():
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        data = json.loads(line)
-                        if "response" in data:
-                            answer_en += data["response"]
-                    except json.JSONDecodeError:
-                        continue
-
-    except Exception as e:
-        return {"answer": f"❌ Error calling Ollama: {e}"}
+    # Fallback to streaming parsing if non-streaming yielded nothing
+    if not answer_en.strip():
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream(
+                    "POST",
+                    OLLAMA_API,
+                    json={"model": MODEL_NAME, "prompt": prompt},
+                ) as resp:
+                    async for line in resp.aiter_lines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                            if "response" in data:
+                                answer_en += data["response"]
+                        except json.JSONDecodeError:
+                            continue
+        except Exception:
+            pass
 
     # 4️⃣ Translate back to user language if needed
     if user_lang != "en":
@@ -89,8 +112,10 @@ async def answer(req: QuestionRequest):
             final_answer = answer_en
     else:
         final_answer = answer_en
-
-    return {"answer": final_answer,"lang": user_lang}
+    if not final_answer.strip():
+        final_answer = "I DONT KNOW ABOUT THAT, I AM ONLY TRAINED TO ANSWER FARMING RELATED QUERIES"
+    print(final_answer)
+    return {"answer": final_answer, "lang": user_lang}
 
 
 

@@ -28,7 +28,7 @@ const LANGUAGES = [
 export default function SettingsScreen() {
   const navigation = useNavigation();
   const [selectedLanguage, setSelectedLanguage] = useState('hi');
-  const [backendUrl, setBackendUrl] = useState('http://10.114.75.244:8000');
+  const [backendUrl, setBackendUrl] = useState('http://192.168.31.131:8000');
   const [userLocation, setUserLocation] = useState('Chennai, Tamil Nadu');
   const [offlineMode, setOfflineMode] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -44,7 +44,7 @@ export default function SettingsScreen() {
       if (settings) {
         const parsed = JSON.parse(settings);
         setSelectedLanguage(parsed.language || 'hi');
-        setBackendUrl(parsed.backendUrl || 'http://10.114.75.244:8000');
+        setBackendUrl(parsed.backendUrl || 'http://192.168.31.131:8000');
         setUserLocation(parsed.location || 'Chennai, Tamil Nadu');
         setOfflineMode(parsed.offlineMode || false);
         setVoiceEnabled(parsed.voiceEnabled !== false);
@@ -253,7 +253,7 @@ export default function SettingsScreen() {
         <Text style={styles.infoText}>Version 1.0.0</Text>
         <Text style={styles.infoText}>Voice Assistant for Farmers</Text>
         <Text style={styles.infoText}>Made with ❤️ for Indian Agriculture</Text>
-      </View>
+    </View>
     </ScrollView>
   );
 }

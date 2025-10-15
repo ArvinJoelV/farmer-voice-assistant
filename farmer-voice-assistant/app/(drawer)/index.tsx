@@ -17,6 +17,7 @@ import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "expo-router";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform as RNPlatform } from 'react-native';
 
 type Message = {
   role: "user" | "assistant";
@@ -46,6 +47,11 @@ export default function FarmerAssistantScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const HISTORY_KEY = 'conversationHistory';
+
+  const getDefaultBackendUrl = (): string => {
+    if (RNPlatform.OS === 'android') return 'http://192.168.31.131:8000';
+    return 'http://192.168.31.131:8000';
+  };
 
   useEffect(() => {
     loadSettings();
@@ -103,7 +109,8 @@ export default function FarmerAssistantScreen() {
     setLoading(true);
 
     try {
-      const backendUrl = settings.backendUrl || 'http://10.114.75.244:8000';
+      const backendUrl = settings.backendUrl || getDefaultBackendUrl();
+      console.log('Using backendUrl:', backendUrl);
       const ansRes = await axios.post(`${backendUrl}/answer`, {
         question: text
       });
@@ -196,7 +203,8 @@ export default function FarmerAssistantScreen() {
     setLoading(true);
 
     try {
-      const backendUrl = settings.backendUrl || 'http://10.114.75.244:8000';
+      const backendUrl = settings.backendUrl || getDefaultBackendUrl();
+      console.log('Using backendUrl (voice):', backendUrl);
       
       // Upload audio for STT
       const formData = new FormData();
@@ -529,3 +537,4 @@ const styles = StyleSheet.create({
   pendingActions: { flexDirection: "row", gap: 12 },
   actionBtn: { marginHorizontal: 8 },
 });
+      
