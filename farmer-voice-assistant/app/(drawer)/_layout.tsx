@@ -52,6 +52,13 @@ export default function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="smart-crop-advisor"
+        options={{
+          title: 'Smart Crop Advisor',
+          drawerIcon: ({ color, size }) => <Ionicons name="leaf-outline" size={size} color={color} />
+        }}
+      />
+      <Drawer.Screen
         name="settings"
         options={{
           title: 'Settings',

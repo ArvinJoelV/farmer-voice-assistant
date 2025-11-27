@@ -109,7 +109,7 @@ export default function FarmerAssistantScreen() {
     setLoading(true);
 
     try {
-      const backendUrl = settings.backendUrl || getDefaultBackendUrl();
+      const backendUrl = getDefaultBackendUrl();
       console.log('Using backendUrl:', backendUrl);
       const ansRes = await axios.post(`${backendUrl}/answer`, {
         question: text
@@ -203,7 +203,7 @@ export default function FarmerAssistantScreen() {
     setLoading(true);
 
     try {
-      const backendUrl = settings.backendUrl || getDefaultBackendUrl();
+      const backendUrl = getDefaultBackendUrl();
       console.log('Using backendUrl (voice):', backendUrl);
       
       // Upload audio for STT

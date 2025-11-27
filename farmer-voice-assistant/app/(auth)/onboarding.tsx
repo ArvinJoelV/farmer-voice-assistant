@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { setProfile, setOnboarded, UserProfile } from '../../services/auth';
+import { setProfile, setOnboarded, UserProfile, updateProfile } from '../../services/auth';
 
 export default function Onboarding() {
   const router = useRouter();
@@ -16,17 +16,29 @@ export default function Onboarding() {
   const onContinue = async () => {
     if (!name || !region) { Alert.alert('Missing', 'Please fill your name and region'); return; }
     setLoading(true);
-    const profile: UserProfile = {
-      name,
-      role,
-      region,
-      landSize: landSize ? parseFloat(landSize) : undefined,
-      landUnit,
-      firstLogin: false,
-    };
-    await setProfile(profile);
-    await setOnboarded(true);
-    router.replace('/(drawer)');
+    
+    try {
+      const profile: UserProfile = {
+        name,
+        role,
+        region,
+        landSize: landSize ? parseFloat(landSize) : undefined,
+        landUnit,
+        preferredLanguage: language,
+        firstLogin: false,
+      };
+      
+      // Update profile on backend
+      await updateProfile(profile);
+      
+      // Also store locally for offline access
+      await setProfile(profile);
+      await setOnboarded(true);
+      
+      router.replace('/(drawer)');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
+    }
     setLoading(false);
   };
 

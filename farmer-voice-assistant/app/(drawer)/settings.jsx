@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
+import { logout } from '../../services/auth';
 
 const LANGUAGES = [
   { code: 'hi', name: 'हिन्दी (Hindi)', flag: '🇮🇳' },
@@ -27,6 +28,7 @@ const LANGUAGES = [
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
+  const router = useRouter();
   const [selectedLanguage, setSelectedLanguage] = useState('hi');
   const [backendUrl, setBackendUrl] = useState('http://192.168.31.131:8000');
   const [userLocation, setUserLocation] = useState('Chennai, Tamil Nadu');
@@ -112,6 +114,36 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout? You will need to login again to access the app.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logout();
+              // Clear all app data
+              await AsyncStorage.multiRemove([
+                'farmerSettings',
+                'conversationHistory',
+                'userProfile',
+                'isOnboarded'
+              ]);
+              // Navigate to login page
+              router.replace('/(auth)/login');
+            } catch (error) {
+              Alert.alert('❌ Error', 'Failed to logout properly');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -119,7 +151,7 @@ export default function SettingsScreen() {
           <Ionicons name="menu" size={22} color="#fff" />
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>⚙️ Settings</Text>
+          <Text style={styles.headerTitle}>Settings</Text>
           <Text style={styles.headerSubtitle}>Customize your farming assistant</Text>
         </View>
         <View style={{ width: 22 }} />
@@ -127,7 +159,7 @@ export default function SettingsScreen() {
 
       {/* Language Selection */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🌐 Language Preference</Text>
+        <Text style={styles.sectionTitle}>Language Preference</Text>
         <View style={styles.languageGrid}>
           {LANGUAGES.map((lang) => (
             <TouchableOpacity
@@ -152,7 +184,7 @@ export default function SettingsScreen() {
 
       {/* Backend Configuration */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🔗 Backend Server</Text>
+        <Text style={styles.sectionTitle}>Backend Server</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>Server URL:</Text>
           <TextInput
@@ -170,7 +202,7 @@ export default function SettingsScreen() {
 
       {/* Location Settings */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>📍 Your Location</Text>
+        <Text style={styles.sectionTitle}>Your Location</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>Village/City:</Text>
           <TextInput
@@ -185,7 +217,7 @@ export default function SettingsScreen() {
 
       {/* App Preferences */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>��️ App Preferences</Text>
+        <Text style={styles.sectionTitle}>App Preferences</Text>
         
         <View style={styles.switchRow}>
           <View style={styles.switchInfo}>
@@ -229,7 +261,7 @@ export default function SettingsScreen() {
 
       {/* Data Management */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🗂️ Data Management</Text>
+        <Text style={styles.sectionTitle}> Data Management</Text>
         
         <TouchableOpacity style={styles.actionButton} onPress={clearHistory}>
           <Ionicons name="trash-outline" size={20} color="#E53935" />
@@ -240,11 +272,16 @@ export default function SettingsScreen() {
           <Ionicons name="download-outline" size={20} color="#2E7D32" />
           <Text style={styles.actionButtonText}>Export Settings</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color="#E53935" />
+          <Text style={[styles.actionButtonText, styles.logoutButtonText]}>Logout</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Save Button */}
       <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
-        <Text style={styles.saveButtonText}>💾 Save All Settings</Text>
+        <Text style={styles.saveButtonText}> Save All Settings</Text>
       </TouchableOpacity>
 
       {/* App Info */}
@@ -387,6 +424,15 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontSize: 16,
     color: '#333',
+  },
+  logoutButton: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  logoutButtonText: {
+    color: '#E53935',
+    fontWeight: 'bold',
   },
   saveButton: {
     backgroundColor: '#2E7D32',

@@ -34,11 +34,16 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         {hasToken ? (
-          <Stack.Screen name="(drawer)" />
+          // User is authenticated
+          onboarded ? (
+            <Stack.Screen name="(drawer)" />
+          ) : (
+            <Stack.Screen name="(auth)/onboarding" />
+          )
         ) : (
+          // User is not authenticated - show auth screens
           <Stack.Screen name="(auth)" />
         )}
-        {!onboarded && <Stack.Screen name="(auth)/onboarding" />}
         <Stack.Screen name="not-found" />
       </Stack>
       <StatusBar style="auto" />

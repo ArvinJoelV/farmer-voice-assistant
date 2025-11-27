@@ -4,6 +4,9 @@ const TOKEN_KEY = 'authToken';
 const PROFILE_KEY = 'userProfile';
 const ONBOARDED_KEY = 'isOnboarded';
 
+// Backend configuration
+const BACKEND_URL = 'http://192.168.31.131:8000'; // Update this to match your backend URL
+
 export type UserProfile = {
   id?: string;
   name?: string;
@@ -43,19 +46,121 @@ export async function setOnboarded(v: boolean): Promise<void> {
   await AsyncStorage.setItem(ONBOARDED_KEY, v ? 'true' : 'false');
 }
 
-// Mock login/signup for now; replace with backend calls later
-export async function loginWithOtp(phone: string, otp: string): Promise<{ token: string; firstLogin: boolean }>
-{
-  // TODO: call backend /auth/login
-  const firstLogin = !(await getProfile());
-  const token = 'demo-token';
-  await setToken(token);
-  return { token, firstLogin };
+// Request OTP from backend
+export async function requestOtp(phone: string): Promise<{ ok: boolean; dev_code?: string }> {
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/request-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error requesting OTP:', error);
+    throw new Error('Failed to request OTP');
+  }
 }
 
-export async function signup(phone: string, name: string): Promise<{ token: string; firstLogin: boolean }>
-{
-  // TODO: call backend /auth/signup
+// Verify OTP with backend
+export async function loginWithOtp(phone: string, otp: string): Promise<{ token: string; firstLogin: boolean; user: any }> {
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code: otp })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'OTP verification failed');
+    }
+    
+    const data = await response.json();
+    await setToken(data.token);
+    
+    // Check if this is first login by checking if user has profile data
+    const existingProfile = await getProfile();
+    const firstLogin = !existingProfile;
+    
+    return { 
+      token: data.token, 
+      firstLogin, 
+      user: data.user 
+    };
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    throw error;
+  }
+}
+
+// Update user profile on backend
+export async function updateProfile(profile: UserProfile): Promise<UserProfile> {
+  try {
+    const token = await getToken();
+    if (!token) throw new Error('No authentication token');
+    
+    const response = await fetch(`${BACKEND_URL}/auth/me`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(profile)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    await setProfile(data);
+    return data;
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    throw error;
+  }
+}
+
+// Get current user from backend
+export async function getCurrentUser(): Promise<UserProfile | null> {
+  try {
+    const token = await getToken();
+    if (!token) return null;
+    
+    const response = await fetch(`${BACKEND_URL}/auth/me`, {
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Token is invalid, clear it
+        await setToken(null);
+        return null;
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    await setProfile(data);
+    return data;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    return null;
+  }
+}
+
+export async function signup(phone: string, name: string): Promise<{ token: string; firstLogin: boolean }> {
+  // For now, signup uses the same OTP flow as login
+  // In a real implementation, you might have a separate signup endpoint
   const token = 'demo-token';
   await setToken(token);
   await setProfile({ phone, name, firstLogin: true, role: 'farmer' });

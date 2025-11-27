@@ -4,8 +4,15 @@ import tempfile, os, json, httpx
 from pydantic import BaseModel
 import whisper
 from googletrans import Translator  # pip install googletrans==4.0.0-rc1
+from routers_auth import router as auth_router
+from routers_crop import router as crop_router
+from db_client import init_database, test_connection
 
-app = FastAPI(title="Farmer Assistant Backend")
+app = FastAPI(
+    title="Farmer Assistant Backend",
+    description="API for Farmer Voice Assistant with ML-powered crop recommendations",
+    version="1.0.0"
+)
 
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
@@ -18,6 +25,26 @@ app.add_middleware(
 
 translator = Translator()
 model = whisper.load_model("small")
+
+# Include routers
+app.include_router(auth_router)
+app.include_router(crop_router)
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    Initialize database on startup
+    """
+    print("🚀 Starting Farmer Assistant Backend...")
+    
+    # Test database connection
+    if await test_connection():
+        # Initialize database collections and indexes
+        await init_database()
+    else:
+        print("⚠️  Database connection failed, but server will continue...")
+    
+    print("✅ Backend server ready!")
 
 @app.post("/stt")
 async def stt(audio: UploadFile = File(...), lang: str = Form("auto")):
