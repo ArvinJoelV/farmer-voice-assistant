@@ -23,7 +23,7 @@ const getBackendUrl = async (): Promise<string> => {
     console.error('Error loading backend URL:', error);
   }
   // Default fallback - update this to match your backend URL
-  const defaultUrl = 'http://192.168.31.131:8000';
+  const defaultUrl = 'http://10.117.149.12:8000';
   console.log('📡 Using default backend URL:', defaultUrl);
   return defaultUrl;
 };
@@ -80,11 +80,11 @@ export async function recommendCrop(
   try {
     const backendUrl = await getBackendUrl();
     const url = `${backendUrl}/crop/recommend`;
-    
+
     console.log('🌱 Crop Advisor API Call:');
     console.log('  URL:', url);
     console.log('  Payload:', JSON.stringify(payload, null, 2));
-    
+
     const response = await axios.post<CropPrediction>(
       url,
       payload,
@@ -95,18 +95,18 @@ export async function recommendCrop(
         timeout: 30000, // 30 second timeout
       }
     );
-    
+
     console.log('✅ Crop Advisor Response:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ Crop Advisor API Error:', error);
-    
+
     if (axios.isAxiosError(error)) {
       if (error.response) {
         // Server responded with error status
         console.error('  Response Error:', error.response.status, error.response.data);
         throw new Error(
-          error.response.data?.detail || 
+          error.response.data?.detail ||
           `Server error: ${error.response.status}`
         );
       } else if (error.request) {

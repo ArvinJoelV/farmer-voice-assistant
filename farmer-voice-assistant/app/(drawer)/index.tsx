@@ -49,8 +49,8 @@ export default function FarmerAssistantScreen() {
   const HISTORY_KEY = 'conversationHistory';
 
   const getDefaultBackendUrl = (): string => {
-    if (RNPlatform.OS === 'android') return 'http://192.168.31.131:8000';
-    return 'http://192.168.31.131:8000';
+    if (RNPlatform.OS === 'android') return 'http://10.117.149.12:8000';
+    return 'http://10.117.149.12:8000';
   };
 
   useEffect(() => {
@@ -73,14 +73,14 @@ export default function FarmerAssistantScreen() {
     try {
       const existingHistory = await AsyncStorage.getItem(HISTORY_KEY);
       const history = existingHistory ? JSON.parse(existingHistory) : [];
-      
+
       // Remove old conversation with same ID if exists
       const updatedHistory = history.filter((conv: Conversation) => conv.id !== conversation.id);
       updatedHistory.unshift(conversation); // Add to beginning
-      
+
       // Keep only last 50 conversations
       const limitedHistory = updatedHistory.slice(0, 50);
-      
+
       await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(limitedHistory));
     } catch (error) {
       console.error('Error saving conversation:', error);
@@ -97,13 +97,13 @@ export default function FarmerAssistantScreen() {
 
   const sendTextMessage = async (text: string) => {
     if (!text.trim()) return;
-    
+
     const newMessage: Message = {
       role: "user",
       text,
       timestamp: Date.now()
     };
-    
+
     setMessages((prev) => [...prev, newMessage]);
     setInput("");
     setLoading(true);
@@ -125,7 +125,7 @@ export default function FarmerAssistantScreen() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      
+
       // Speak the answer if voice is enabled
       if (settings.voiceEnabled !== false) {
         Speech.speak(answer, { language: `${language}-IN` });
@@ -151,12 +151,12 @@ export default function FarmerAssistantScreen() {
         Alert.alert("Permission Required", "Please allow microphone access to use voice features.");
         return;
       }
-      
+
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
-      
+
       const rec = new Audio.Recording();
       await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await rec.startAsync();
@@ -170,7 +170,7 @@ export default function FarmerAssistantScreen() {
   const stopRecording = async () => {
     setIsRecording(false);
     if (!recording) return;
-    
+
     try {
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
@@ -183,12 +183,12 @@ export default function FarmerAssistantScreen() {
 
   const playPendingAudio = async () => {
     if (!pendingAudio) return;
-    
+
     if (sound) {
       await sound.unloadAsync();
       setSound(null);
     }
-    
+
     const { sound: newSound } = await Audio.Sound.createAsync({ uri: pendingAudio });
     setSound(newSound);
     await newSound.playAsync();
@@ -205,7 +205,7 @@ export default function FarmerAssistantScreen() {
     try {
       const backendUrl = getDefaultBackendUrl();
       console.log('Using backendUrl (voice):', backendUrl);
-      
+
       // Upload audio for STT
       const formData = new FormData();
       formData.append("audio", {
@@ -245,7 +245,7 @@ export default function FarmerAssistantScreen() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      
+
       // Speak the answer if voice is enabled
       if (settings.voiceEnabled !== false) {
         Speech.speak(answer, { language: `${language}-IN` });
@@ -354,7 +354,7 @@ export default function FarmerAssistantScreen() {
           {item.text}
         </Text>
       )}
-      
+
       {item.timestamp && (
         <Text style={styles.timestamp}>
           {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -537,4 +537,4 @@ const styles = StyleSheet.create({
   pendingActions: { flexDirection: "row", gap: 12 },
   actionBtn: { marginHorizontal: 8 },
 });
-      
+

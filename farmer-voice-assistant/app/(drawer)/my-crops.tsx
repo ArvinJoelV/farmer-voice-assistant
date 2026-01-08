@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, Alert, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useFocusEffect } from 'expo-router';
+import { getCropInfo, CropInfo, CropStage } from '../../services/cropInfo';
 
 type Crop = {
   id: string;
@@ -18,26 +19,8 @@ type Crop = {
   weatherAlerts: string[];
 };
 
-type CropStage = { name: string; duration: number; actions: string[]; fertilizers: string[]; irrigation: string; pest: string[] };
-
-const CYCLE: Record<string, CropStage[]> = {
-  Wheat: [
-    { name: 'Sowing', duration: 7, actions: ['Prepare seed bed', 'Basal fertilizer'], fertilizers: ['DAP 50kg/acre', 'Urea 25kg/acre'], irrigation: 'Light irrigation after sowing', pest: ['Seed treatment'] },
-    { name: 'Germination', duration: 10, actions: ['Monitor germination', 'Check moisture'], fertilizers: [], irrigation: 'Light if needed', pest: ['Watch damping off'] },
-    { name: 'Tillering', duration: 35, actions: ['Top dress urea', 'Weed control'], fertilizers: ['Urea 50kg/acre'], irrigation: 'Every 10-12 days', pest: ['Monitor aphids'] },
-    { name: 'Jointing', duration: 25, actions: ['Second top dressing'], fertilizers: ['Urea 25kg/acre'], irrigation: 'Increase frequency', pest: ['Watch rust'] },
-    { name: 'Flowering', duration: 15, actions: ['Reduce irrigation'], fertilizers: [], irrigation: 'Reduce to prevent lodging', pest: ['Watch head blast'] },
-    { name: 'Harvesting', duration: 10, actions: ['Harvest 20-25% moisture'], fertilizers: [], irrigation: 'Stop irrigation', pest: ['Storage pests'] },
-  ],
-  Rice: [
-    { name: 'Nursery', duration: 25, actions: ['Prepare nursery', 'Sow pre-germinated'], fertilizers: ['Compost 5kg/sqm'], irrigation: 'Keep moist', pest: ['Blast watch'] },
-    { name: 'Transplanting', duration: 5, actions: ['Transplant 20-25 day seedlings'], fertilizers: ['Basal DAP 50 + Urea 25kg/acre'], irrigation: '2-3cm water', pest: ['Stem borer watch'] },
-    { name: 'Tillering', duration: 40, actions: ['Top dress urea', 'Weed control'], fertilizers: ['Urea 50kg/acre'], irrigation: '5-7cm water', pest: ['Leaf folder watch'] },
-    { name: 'Panicle Initiation', duration: 25, actions: ['Second top dressing'], fertilizers: ['Urea 25kg/acre'], irrigation: '5-7cm water', pest: ['BPH watch'] },
-    { name: 'Flowering & Grain', duration: 35, actions: ['Control irrigation'], fertilizers: [], irrigation: 'Gradually reduce', pest: ['Grain borer watch'] },
-    { name: 'Harvesting', duration: 15, actions: ['Harvest at 80% maturity'], fertilizers: [], irrigation: 'Stop 7-10 days before', pest: ['Storage pests'] },
-  ],
-};
+// Crop stage cache to avoid repeated API calls
+const cropInfoCache: Record<string, CropInfo> = {};
 
 export default function MyCrops() {
   const navigation = useNavigation();
@@ -45,54 +28,237 @@ export default function MyCrops() {
   const [addOpen, setAddOpen] = useState(false);
   const [detail, setDetail] = useState<Crop | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [cropInfoMap, setCropInfoMap] = useState<Record<string, CropInfo>>({});
 
   const [form, setForm] = useState({ name: '', variety: '', sowingDate: '', landSize: '', landUnit: 'acres' as 'acres' | 'hectares', location: '' });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(); 
+  }, []);
+
+  // Refresh crop stages when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const refresh = async () => {
+        const currentCrops = crops.length > 0 ? crops : JSON.parse(await AsyncStorage.getItem('farmerCrops') || '[]');
+        if (currentCrops.length > 0) {
+          await refreshCropStages();
+        }
+      };
+      refresh();
+    }, [crops.length])
+  );
 
   const load = async () => {
     const saved = await AsyncStorage.getItem('farmerCrops');
-    if (saved) setCrops(JSON.parse(saved));
-    else setCrops([
-      { id: '1', name: 'Wheat', variety: 'HD-2967', sowingDate: '2025-01-10', landSize: 2.5, landUnit: 'acres', location: 'TN', currentStage: 'Tillering', nextAction: 'Top dress urea 50kg/acre', nextActionDate: '2025-02-18', weatherAlerts: ['Heavy rain: Do not irrigate today.'] },
-    ]);
+    if (saved) {
+      const loadedCrops = JSON.parse(saved);
+      setCrops(loadedCrops);
+      // Refresh stages for loaded crops
+      if (loadedCrops.length > 0) {
+        setTimeout(() => refreshCropStages(), 100);
+      }
+    } else {
+      setCrops([
+        { id: '1', name: 'Wheat', variety: 'HD-2967', sowingDate: '2025-01-10', landSize: 2.5, landUnit: 'acres', location: 'TN', currentStage: 'Tillering', nextAction: 'Top dress urea 50kg/acre', nextActionDate: '2025-02-18', weatherAlerts: ['Heavy rain: Do not irrigate today.'] },
+      ]);
+    }
   };
 
   const save = async (list: Crop[]) => AsyncStorage.setItem('farmerCrops', JSON.stringify(list));
 
-  const computeStage = (name: string, sowingDate: string) => {
-    const stages = CYCLE[name] || [];
+  /**
+   * Fetch crop information from backend API
+   */
+  const fetchCropInfo = async (cropName: string): Promise<CropInfo | null> => {
+    try {
+      // Check cache first
+      const cacheKey = cropName.toLowerCase();
+      if (cropInfoCache[cacheKey]) {
+        return cropInfoCache[cacheKey];
+      }
+
+      // Fetch from API
+      const info = await getCropInfo(cropName);
+      cropInfoCache[cacheKey] = info;
+      return info;
+    } catch (error) {
+      console.error(`Error fetching crop info for ${cropName}:`, error);
+      return null;
+    }
+  };
+
+  /**
+   * Refresh crop stages for all crops
+   */
+  const refreshCropStages = async () => {
+    const currentCrops = crops.length > 0 ? crops : JSON.parse(await AsyncStorage.getItem('farmerCrops') || '[]');
+    if (currentCrops.length === 0) {
+      setRefreshing(false);
+      return;
+    }
+    
+    setRefreshing(true);
+    const updatedCrops: Crop[] = [];
+    const infoMap: Record<string, CropInfo> = {};
+
+    for (const crop of currentCrops) {
+      try {
+        const cropInfo = await fetchCropInfo(crop.name);
+        if (cropInfo) {
+          infoMap[crop.name.toLowerCase()] = cropInfo;
+          const { stage, nextAction, nextDate } = computeStage(cropInfo, crop.sowingDate);
+          updatedCrops.push({
+            ...crop,
+            currentStage: stage,
+            nextAction,
+            nextActionDate: nextDate,
+          });
+        } else {
+          // Fallback if API fails - keep existing data
+          updatedCrops.push(crop);
+        }
+      } catch (error) {
+        console.error(`Error refreshing crop ${crop.name}:`, error);
+        // Keep existing crop data if refresh fails
+        updatedCrops.push(crop);
+      }
+    }
+
+    setCrops(updatedCrops);
+    setCropInfoMap(infoMap);
+    await save(updatedCrops);
+    setRefreshing(false);
+  };
+
+  /**
+   * Compute current stage based on crop info and sowing date
+   */
+  const computeStage = (cropInfo: CropInfo, sowingDate: string) => {
+    const stages = cropInfo.stages || [];
     const start = new Date(sowingDate).getTime();
     const days = Math.floor((Date.now() - start) / 86400000);
-    let acc = 0; let current = stages[0] || { name: 'Unknown', duration: 0, actions: ['Monitor crop'], fertilizers: [], irrigation: 'As needed', pest: [] };
-    for (const s of stages) { acc += s.duration; if (days <= acc) { current = s; break; } }
+    
+    if (days < 0) {
+      // Crop not yet sown
+      return { 
+        stage: 'Not Sown', 
+        nextAction: 'Prepare for sowing', 
+        nextDate: sowingDate 
+      };
+    }
+
+    let acc = 0;
+    let current = stages[0] || { 
+      name: 'Unknown', 
+      duration: 0, 
+      actions: ['Monitor crop'], 
+      fertilizers: [], 
+      irrigation: 'As needed', 
+      pest: [] 
+    };
+
+    for (const s of stages) {
+      acc += s.duration;
+      if (days <= acc) {
+        current = s;
+        break;
+      }
+    }
+
+    // If past all stages, crop is ready for harvest
+    if (days > acc) {
+      current = stages[stages.length - 1] || current;
+      return {
+        stage: 'Ready for Harvest',
+        nextAction: 'Harvest crop',
+        nextDate: new Date(start + acc * 86400000).toISOString().slice(0, 10)
+      };
+    }
+
     const nextDate = new Date(start + acc * 86400000).toISOString().slice(0, 10);
-    return { stage: current.name, nextAction: current.actions[0] || 'Monitor crop', nextDate };
+    return { 
+      stage: current.name, 
+      nextAction: current.actions[0] || 'Monitor crop', 
+      nextDate 
+    };
   };
 
   const addCrop = async () => {
-    if (!form.name || !form.sowingDate || !form.landSize) { Alert.alert('Missing', 'Fill crop name, sowing date, land size'); return; }
+    if (!form.name || !form.sowingDate || !form.landSize) { 
+      Alert.alert('Missing', 'Fill crop name, sowing date, land size'); 
+      return; 
+    }
+    
     setSaving(true);
-    const { stage, nextAction, nextDate } = computeStage(form.name, form.sowingDate);
-    const crop: Crop = {
-      id: Date.now().toString(),
-      name: form.name,
-      variety: form.variety,
-      sowingDate: form.sowingDate,
-      landSize: parseFloat(form.landSize),
-      landUnit: form.landUnit,
-      location: form.location,
-      currentStage: stage,
-      nextAction,
-      nextActionDate: nextDate,
-      weatherAlerts: [],
-    };
-    const list = [crop, ...crops];
-    setCrops(list);
-    await save(list);
-    setAddOpen(false);
-    setForm({ name: '', variety: '', sowingDate: '', landSize: '', landUnit: 'acres', location: '' });
-    setSaving(false);
+    setLoading(true);
+
+    try {
+      // Fetch crop info from API
+      const cropInfo = await fetchCropInfo(form.name);
+      
+      let stage = 'Unknown';
+      let nextAction = 'Monitor crop';
+      let nextDate = form.sowingDate;
+
+      if (cropInfo) {
+        const computed = computeStage(cropInfo, form.sowingDate);
+        stage = computed.stage;
+        nextAction = computed.nextAction;
+        nextDate = computed.nextDate;
+        
+        // Store crop info in map
+        setCropInfoMap(prev => ({
+          ...prev,
+          [form.name.toLowerCase()]: cropInfo
+        }));
+      } else {
+        // Fallback for unknown crops
+        const start = new Date(form.sowingDate).getTime();
+        const days = Math.floor((Date.now() - start) / 86400000);
+        if (days < 0) {
+          stage = 'Not Sown';
+          nextAction = 'Prepare for sowing';
+        } else if (days < 30) {
+          stage = 'Early Growth';
+          nextAction = 'Monitor growth and apply fertilizers';
+        } else if (days < 90) {
+          stage = 'Vegetative Growth';
+          nextAction = 'Continue monitoring and irrigation';
+        } else {
+          stage = 'Maturation';
+          nextAction = 'Prepare for harvest';
+        }
+      }
+
+      const crop: Crop = {
+        id: Date.now().toString(),
+        name: form.name,
+        variety: form.variety,
+        sowingDate: form.sowingDate,
+        landSize: parseFloat(form.landSize),
+        landUnit: form.landUnit,
+        location: form.location,
+        currentStage: stage,
+        nextAction,
+        nextActionDate: nextDate,
+        weatherAlerts: [],
+      };
+      
+      const list = [crop, ...crops];
+      setCrops(list);
+      await save(list);
+      setAddOpen(false);
+      setForm({ name: '', variety: '', sowingDate: '', landSize: '', landUnit: 'acres', location: '' });
+    } catch (error) {
+      console.error('Error adding crop:', error);
+      Alert.alert('Error', 'Failed to add crop. Please try again.');
+    } finally {
+      setSaving(false);
+      setLoading(false);
+    }
   };
 
   const remove = (id: string) => Alert.alert('Delete', 'Remove this crop?', [ { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { const list = crops.filter(c => c.id !== id); setCrops(list); await save(list); } } ]);
@@ -125,26 +291,76 @@ export default function MyCrops() {
 
   const renderDetail = () => {
     if (!detail) return null;
-    const stages = CYCLE[detail.name] || [];
+    
+    const cropInfo = cropInfoMap[detail.name.toLowerCase()];
+    const stages = cropInfo?.stages || [];
     const base = new Date(detail.sowingDate).getTime();
     let day = 0;
+
+    // If no crop info loaded, try to fetch it
+    if (!cropInfo && stages.length === 0) {
+      fetchCropInfo(detail.name).then(info => {
+        if (info) {
+          setCropInfoMap(prev => ({
+            ...prev,
+            [detail.name.toLowerCase()]: info
+          }));
+        }
+      });
+    }
+
     return (
       <ScrollView style={{ flex: 1, padding: 20 }}>
         <Text style={styles.detailTitle}>{detail.name} {detail.variety ? `• ${detail.variety}` : ''}</Text>
         <Text style={styles.detailSub}>{detail.landSize} {detail.landUnit} • {detail.location || '—'}</Text>
+        
+        {cropInfo?.description && (
+          <Text style={styles.description}>{cropInfo.description}</Text>
+        )}
+        
         <Text style={styles.sectionTitle}>🌱 Crop Calendar</Text>
-        {stages.map((s, i) => { const start = day + 1; day += s.duration; const end = day; const endDate = new Date(base + day * 86400000).toLocaleDateString(); return (
-          <View key={i} style={styles.stageCard}>
-            <View style={styles.rowBetween}><Text style={styles.stageName}>{s.name} ({s.duration}d)</Text><Text style={styles.stageDate}>Day {start}-{end}</Text></View>
-            <Text style={styles.label}>Actions</Text>
-            {s.actions.map((a, idx) => <Text key={idx} style={styles.item}>• {a}</Text>)}
-            {!!s.fertilizers.length && (<><Text style={styles.label}>Fertilizers</Text>{s.fertilizers.map((f, idx) => <Text key={idx} style={styles.item}>• {f}</Text>)}</>)}
-            <Text style={styles.label}>Irrigation</Text>
-            <Text style={styles.item}>• {s.irrigation}</Text>
-            {!!s.pest.length && (<><Text style={styles.label}>Pest Management</Text>{s.pest.map((p, idx) => <Text key={idx} style={styles.item}>• {p}</Text>)}</>)}
-            <Text style={styles.nextDueSmall}>Target by: {endDate}</Text>
+        
+        {stages.length > 0 ? (
+          stages.map((s, i) => { 
+            const start = day + 1; 
+            day += s.duration; 
+            const end = day; 
+            const endDate = new Date(base + day * 86400000).toLocaleDateString(); 
+            return (
+              <View key={i} style={styles.stageCard}>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.stageName}>{s.name} ({s.duration}d)</Text>
+                  <Text style={styles.stageDate}>Day {start}-{end}</Text>
+                </View>
+                {s.description && (
+                  <Text style={styles.stageDescription}>{s.description}</Text>
+                )}
+                <Text style={styles.label}>Actions</Text>
+                {s.actions.map((a, idx) => <Text key={idx} style={styles.item}>• {a}</Text>)}
+                {!!s.fertilizers.length && (
+                  <>
+                    <Text style={styles.label}>Fertilizers</Text>
+                    {s.fertilizers.map((f, idx) => <Text key={idx} style={styles.item}>• {f}</Text>)}
+                  </>
+                )}
+                <Text style={styles.label}>Irrigation</Text>
+                <Text style={styles.item}>• {s.irrigation}</Text>
+                {!!s.pest.length && (
+                  <>
+                    <Text style={styles.label}>Pest Management</Text>
+                    {s.pest.map((p, idx) => <Text key={idx} style={styles.item}>• {p}</Text>)}
+                  </>
+                )}
+                <Text style={styles.nextDueSmall}>Target by: {endDate}</Text>
+              </View>
+            ); 
+          })
+        ) : (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="small" color="#2E7D32" />
+            <Text style={styles.loadingText}>Loading crop calendar...</Text>
           </View>
-        ); })}
+        )}
       </ScrollView>
     );
   };
@@ -156,7 +372,14 @@ export default function MyCrops() {
           <Ionicons name="menu" size={22} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>🌾 My Crops</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setAddOpen(true)}><Ionicons name="add" size={22} color="#fff" /></TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={styles.addBtn} onPress={refreshCropStages} disabled={refreshing}>
+            <Ionicons name="refresh" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setAddOpen(true)}>
+            <Ionicons name="add" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
       {crops.length === 0 ? (
         <View style={styles.empty}>
@@ -166,7 +389,19 @@ export default function MyCrops() {
           <TouchableOpacity style={styles.primary} onPress={() => setAddOpen(true)}><Text style={styles.primaryText}>Add Crop</Text></TouchableOpacity>
         </View>
       ) : (
-        <FlatList data={crops} renderItem={renderItem} keyExtractor={(i) => i.id} contentContainerStyle={{ padding: 16 }} />
+        <FlatList 
+          data={crops} 
+          renderItem={renderItem} 
+          keyExtractor={(i) => i.id} 
+          contentContainerStyle={{ padding: 16 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={refreshCropStages}
+              colors={['#2E7D32']}
+            />
+          }
+        />
       )}
 
       <Modal visible={addOpen} animationType="slide" presentationStyle="pageSheet">
@@ -245,7 +480,11 @@ const styles = StyleSheet.create({
   unitText: { color: '#fff', fontWeight: 'bold' },
   detailTitle: { fontSize: 22, fontWeight: 'bold', color: '#2E7D32' },
   detailSub: { fontSize: 14, color: '#666', marginTop: 4, marginBottom: 12 },
+  description: { fontSize: 14, color: '#666', fontStyle: 'italic', marginBottom: 12, lineHeight: 20 },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 8 },
+  loadingCard: { padding: 20, alignItems: 'center', backgroundColor: '#FAFAFA', borderRadius: 12, marginTop: 10 },
+  loadingText: { marginTop: 8, color: '#666', fontSize: 14 },
+  stageDescription: { fontSize: 13, color: '#666', fontStyle: 'italic', marginBottom: 8 },
   stageCard: { backgroundColor: '#FAFAFA', borderRadius: 12, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#E0E0E0' },
   stageName: { fontSize: 15, fontWeight: 'bold', color: '#333' },
   stageDate: { fontSize: 12, color: '#666' },

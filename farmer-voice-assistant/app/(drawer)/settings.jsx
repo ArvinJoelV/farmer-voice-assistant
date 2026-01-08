@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRouter } from 'expo-router';
 import { logout } from '../../services/auth';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const LANGUAGES = [
   { code: 'hi', name: 'हिन्दी (Hindi)', flag: '🇮🇳' },
@@ -29,8 +30,8 @@ const LANGUAGES = [
 export default function SettingsScreen() {
   const navigation = useNavigation();
   const router = useRouter();
-  const [selectedLanguage, setSelectedLanguage] = useState('hi');
-  const [backendUrl, setBackendUrl] = useState('http://192.168.31.131:8000');
+  const { language, setLanguage, t } = useLanguage();
+  const [backendUrl, setBackendUrl] = useState('http://10.117.149.12:8000');
   const [userLocation, setUserLocation] = useState('Chennai, Tamil Nadu');
   const [offlineMode, setOfflineMode] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -45,8 +46,10 @@ export default function SettingsScreen() {
       const settings = await AsyncStorage.getItem('farmerSettings');
       if (settings) {
         const parsed = JSON.parse(settings);
-        setSelectedLanguage(parsed.language || 'hi');
-        setBackendUrl(parsed.backendUrl || 'http://192.168.31.131:8000');
+        if (parsed.language) {
+          setLanguage(parsed.language);
+        }
+        setBackendUrl(parsed.backendUrl || 'http://10.117.149.12:8000');
         setUserLocation(parsed.location || 'Chennai, Tamil Nadu');
         setOfflineMode(parsed.offlineMode || false);
         setVoiceEnabled(parsed.voiceEnabled !== false);
@@ -60,7 +63,7 @@ export default function SettingsScreen() {
   const saveSettings = async () => {
     try {
       const settings = {
-        language: selectedLanguage,
+        language,
         backendUrl,
         location: userLocation,
         offlineMode,
@@ -68,9 +71,23 @@ export default function SettingsScreen() {
         notificationsEnabled,
       };
       await AsyncStorage.setItem('farmerSettings', JSON.stringify(settings));
-      Alert.alert('✅ Success', 'Settings saved successfully!');
+      Alert.alert(t('common.success'), t('settings.saved'));
     } catch (error) {
-      Alert.alert('❌ Error', 'Failed to save settings');
+      Alert.alert(t('common.error'), t('settings.saveError'));
+    }
+  };
+
+  const handleLanguageChange = async (langCode) => {
+    await setLanguage(langCode);
+    // Language is saved immediately when setLanguage is called
+    // Also update farmerSettings for consistency
+    try {
+      const settings = await AsyncStorage.getItem('farmerSettings');
+      const parsed = settings ? JSON.parse(settings) : {};
+      parsed.language = langCode;
+      await AsyncStorage.setItem('farmerSettings', JSON.stringify(parsed));
+    } catch (error) {
+      console.error('Error updating language in settings:', error);
     }
   };
 
@@ -81,7 +98,7 @@ export default function SettingsScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: 'test connection' }),
       });
-      
+
       if (response.ok) {
         Alert.alert('✅ Connection Success', 'Backend is working properly!');
       } else {
@@ -151,29 +168,29 @@ export default function SettingsScreen() {
           <Ionicons name="menu" size={22} color="#fff" />
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>Settings</Text>
-          <Text style={styles.headerSubtitle}>Customize your farming assistant</Text>
+          <Text style={styles.headerTitle}>{t('settings.title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('settings.subtitle')}</Text>
         </View>
         <View style={{ width: 22 }} />
       </View>
 
       {/* Language Selection */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Language Preference</Text>
+        <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
         <View style={styles.languageGrid}>
           {LANGUAGES.map((lang) => (
             <TouchableOpacity
               key={lang.code}
               style={[
                 styles.languageOption,
-                selectedLanguage === lang.code && styles.selectedLanguage,
+                language === lang.code && styles.selectedLanguage,
               ]}
-              onPress={() => setSelectedLanguage(lang.code)}
+              onPress={() => handleLanguageChange(lang.code)}
             >
               <Text style={styles.languageFlag}>{lang.flag}</Text>
               <Text style={[
                 styles.languageName,
-                selectedLanguage === lang.code && styles.selectedLanguageText
+                language === lang.code && styles.selectedLanguageText
               ]}>
                 {lang.name}
               </Text>
@@ -184,7 +201,7 @@ export default function SettingsScreen() {
 
       {/* Backend Configuration */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Backend Server</Text>
+        <Text style={styles.sectionTitle}>{t('settings.backend')}</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>Server URL:</Text>
           <TextInput
@@ -202,7 +219,7 @@ export default function SettingsScreen() {
 
       {/* Location Settings */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your Location</Text>
+        <Text style={styles.sectionTitle}>{t('settings.location')}</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>Village/City:</Text>
           <TextInput
@@ -217,12 +234,12 @@ export default function SettingsScreen() {
 
       {/* App Preferences */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>App Preferences</Text>
-        
+        <Text style={styles.sectionTitle}>{t('settings.preferences')}</Text>
+
         <View style={styles.switchRow}>
           <View style={styles.switchInfo}>
-            <Text style={styles.switchLabel}>Voice Assistant</Text>
-            <Text style={styles.switchDescription}>Enable voice input/output</Text>
+            <Text style={styles.switchLabel}>{t('settings.voice')}</Text>
+            <Text style={styles.switchDescription}>{t('settings.voiceDesc')}</Text>
           </View>
           <Switch
             value={voiceEnabled}
@@ -234,8 +251,8 @@ export default function SettingsScreen() {
 
         <View style={styles.switchRow}>
           <View style={styles.switchInfo}>
-            <Text style={styles.switchLabel}>Offline Mode</Text>
-            <Text style={styles.switchDescription}>Use cached responses when offline</Text>
+            <Text style={styles.switchLabel}>{t('settings.offline')}</Text>
+            <Text style={styles.switchDescription}>{t('settings.offlineDesc')}</Text>
           </View>
           <Switch
             value={offlineMode}
@@ -247,8 +264,8 @@ export default function SettingsScreen() {
 
         <View style={styles.switchRow}>
           <View style={styles.switchInfo}>
-            <Text style={styles.switchLabel}>Notifications</Text>
-            <Text style={styles.switchDescription}>Get farming tips and alerts</Text>
+            <Text style={styles.switchLabel}>{t('settings.notifications')}</Text>
+            <Text style={styles.switchDescription}>{t('settings.notificationsDesc')}</Text>
           </View>
           <Switch
             value={notificationsEnabled}
@@ -261,27 +278,27 @@ export default function SettingsScreen() {
 
       {/* Data Management */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}> Data Management</Text>
-        
+        <Text style={styles.sectionTitle}>{t('settings.dataManagement')}</Text>
+
         <TouchableOpacity style={styles.actionButton} onPress={clearHistory}>
           <Ionicons name="trash-outline" size={20} color="#E53935" />
-          <Text style={styles.actionButtonText}>Clear Conversation History</Text>
+          <Text style={styles.actionButtonText}>{t('settings.clearHistory')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={saveSettings}>
           <Ionicons name="download-outline" size={20} color="#2E7D32" />
-          <Text style={styles.actionButtonText}>Export Settings</Text>
+          <Text style={styles.actionButtonText}>{t('settings.export')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#E53935" />
-          <Text style={[styles.actionButtonText, styles.logoutButtonText]}>Logout</Text>
+          <Text style={[styles.actionButtonText, styles.logoutButtonText]}>{t('settings.logout')}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Save Button */}
       <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
-        <Text style={styles.saveButtonText}> Save All Settings</Text>
+        <Text style={styles.saveButtonText}>{t('settings.saveAll')}</Text>
       </TouchableOpacity>
 
       {/* App Info */}
@@ -290,7 +307,7 @@ export default function SettingsScreen() {
         <Text style={styles.infoText}>Version 1.0.0</Text>
         <Text style={styles.infoText}>Voice Assistant for Farmers</Text>
         <Text style={styles.infoText}>Made with ❤️ for Indian Agriculture</Text>
-    </View>
+      </View>
     </ScrollView>
   );
 }

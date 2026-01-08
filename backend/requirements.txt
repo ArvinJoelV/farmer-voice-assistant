@@ -5,6 +5,7 @@ pymongo==4.6.0
 pydantic==2.5.0
 python-multipart==0.0.6
 httpx==0.13.3
+httpcore==0.9.1
 openai-whisper==20231117
 googletrans==4.0.0-rc1
 PyJWT==2.8.0

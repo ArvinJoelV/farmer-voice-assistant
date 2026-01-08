@@ -5,6 +5,7 @@ import { useColorScheme } from '../hooks/useColorScheme';
 import React, { useEffect, useState } from 'react';
 import { getToken, isOnboarded } from '../services/auth';
 import { View, ActivityIndicator } from 'react-native';
+import { LanguageProvider } from '../contexts/LanguageContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -31,22 +32,24 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        {hasToken ? (
-          // User is authenticated
-          onboarded ? (
-            <Stack.Screen name="(drawer)" />
+    <LanguageProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack screenOptions={{ headerShown: false }}>
+          {hasToken ? (
+            // User is authenticated
+            onboarded ? (
+              <Stack.Screen name="(drawer)" />
+            ) : (
+              <Stack.Screen name="(auth)/onboarding" />
+            )
           ) : (
-            <Stack.Screen name="(auth)/onboarding" />
-          )
-        ) : (
-          // User is not authenticated - show auth screens
-          <Stack.Screen name="(auth)" />
-        )}
-        <Stack.Screen name="not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+            // User is not authenticated - show auth screens
+            <Stack.Screen name="(auth)" />
+          )}
+          <Stack.Screen name="not-found" />
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </LanguageProvider>
   );
 }

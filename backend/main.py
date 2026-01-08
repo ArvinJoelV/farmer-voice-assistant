@@ -6,6 +6,7 @@ import whisper
 from googletrans import Translator  # pip install googletrans==4.0.0-rc1
 from routers_auth import router as auth_router
 from routers_crop import router as crop_router
+from routers_crop_info import router as crop_info_router
 from db_client import init_database, test_connection
 
 app = FastAPI(
@@ -29,6 +30,7 @@ model = whisper.load_model("small")
 # Include routers
 app.include_router(auth_router)
 app.include_router(crop_router)
+app.include_router(crop_info_router)
 
 @app.on_event("startup")
 async def startup_event():
@@ -57,8 +59,8 @@ async def stt(audio: UploadFile = File(...), lang: str = Form("auto")):
 
     return {"text": result["text"], "lang": lang}
 
-OLLAMA_API = os.getenv("OLLAMA_API", "http://192.168.31.131:11434/api/generate")
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "gemma3:4b")
+OLLAMA_API = os.getenv("OLLAMA_API", "http://10.117.149.12:11434/api/generate")
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "tinyllama")
 
 class QuestionRequest(BaseModel):
     question: str
@@ -72,14 +74,16 @@ async def answer(req: QuestionRequest):
     try:
         detected = translator.detect(user_question)
         user_lang = detected.lang
-    except Exception:
+    except Exception as e:
+        print(f"❌ Ollama translation error (to en): {e}")
         user_lang = "en"
 
     # 2️⃣ Translate input to English if needed
     if user_lang != "en":
         try:
             translated_input = translator.translate(user_question, src=user_lang, dest="en").text
-        except Exception:
+        except Exception as e:
+            print(f"❌ Ollama translation input error: {e}")
             translated_input = user_question
     else:
         translated_input = user_question
@@ -93,24 +97,31 @@ async def answer(req: QuestionRequest):
     )
     # Prefer non-streaming call with stream:false to ensure a full body response
     try:
+        print(f"🔄 Connecting to Ollama at {OLLAMA_API} with model {MODEL_NAME}...")
         async with httpx.AsyncClient(timeout=120) as client:
             r = await client.post(
                 OLLAMA_API,
                 json={"model": MODEL_NAME, "prompt": prompt, "stream": False},
             )
+            print(f"📥 Ollama Connect Status: {r.status_code}")
             if r.status_code == 200:
                 try:
                     data = r.json()
                     answer_en = data.get("response", "")
-                except Exception:
+                    if not answer_en: print("⚠️ Ollama response empty JSON")
+                except Exception as e:
+                    print(f"❌ Ollama JSON parse error: {e}")
                     answer_en = ""
             else:
+                print(f"❌ Ollama returned status {r.status_code}: {r.text}")
                 answer_en = ""
-    except Exception:
+    except Exception as e:
+        print(f"❌ Ollama connection failed: {e}")
         answer_en = ""
 
     # Fallback to streaming parsing if non-streaming yielded nothing
     if not answer_en.strip():
+        print("🔄 Attempting streaming fallback...")
         try:
             async with httpx.AsyncClient(timeout=120) as client:
                 async with client.stream(
@@ -128,14 +139,16 @@ async def answer(req: QuestionRequest):
                                 answer_en += data["response"]
                         except json.JSONDecodeError:
                             continue
-        except Exception:
-            pass
+        except Exception as e:
+             print(f"❌ Streaming fallback failed: {e}")
+             pass
 
     # 4️⃣ Translate back to user language if needed
     if user_lang != "en":
         try:
             final_answer = translator.translate(answer_en, src="en", dest=user_lang).text
-        except Exception:
+        except Exception as e:
+            print(f"❌ Translation back error: {e}")
             final_answer = answer_en
     else:
         final_answer = answer_en
